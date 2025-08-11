@@ -1,0 +1,36 @@
+name: Keep Alive Ping
+on:
+  schedule:
+    - cron: '*/20 * * * *'  # Runs every 10 minutes
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Send HTTP GET request to Hugging Face Space
+        run: |
+          response=$(curl -s -w "\n%{http_code}" https://huggingface.co/spaces/Sonichigo/harness-database-devops)
+          status_code=$(echo "$response" | tail -n1)
+          content=$(echo "$response" | sed '$d')
+          
+          echo "Status code: $status_code"
+          echo "Response content: $content"
+          
+          if [ "$status_code" -ne 200 ]; then
+            echo "Error: Received status code $status_code"
+            exit 1
+          fi
+      
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Hugging Face Space Ping Failed',
+              body: `Hugging Face Space ping failed at ${new Date().toISOString()}\nPlease check https://huggingface.co/spaces/Sonichigo/harness-database-devops`
+            })
